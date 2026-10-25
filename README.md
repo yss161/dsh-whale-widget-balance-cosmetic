@@ -1,7 +1,8 @@
 # dsh-whale-widget 余额美化补丁
 
 > 让 [小鲸鱼挂件](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的余额栏显示一个**好看的假数字**，
-> 并且**随着对话消耗正常往下掉**，专门给「接的是没有余额接口的第三方 API」的场景用。
+> 并且**随着对话消耗正常往下掉**、「今日已用」也真实变化，
+> 专门给「接的是没有余额接口的第三方 API」的场景用。
 
 ## 这是干什么的
 
@@ -44,8 +45,9 @@ DSH 的小鲸鱼挂件（`dsh-whale-widget`）会去 `api.deepseek.com/user/bala
 | 挂件面板里的余额 | ✅ 同上 |
 | 真实 API 扣费 | ❌ 完全无关 |
 | 小鲸鱼记账账本 `.dshw-usage.json` | ❌ 不动 |
-| 今日已用 / 近 7 天 | ❌ 不动 |
+| 今日已用（泡泡里那行） | ✅ 改成账本里的**本机会话消耗**（原来恒为 0） |
 | 余额预警 | ⚠️ 按**显示值**判断（因为值已被替换）—— 把假数字设得高于预警阈值即可避免误报 |
+| 账本里的近 7 天 / 全部记录 | ❌ 不动 |
 | 今日预算 | ❌ 仍按真实金额判断 |
 
 补丁打在**前端** `whale-widget.js` 的 `refresh()` 里，也就是「宿主已经把结果发过来之后」的位置：
@@ -141,6 +143,48 @@ powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 2000
 powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 2000 -Fixed
 powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 -Restore
 ```
+
+## v3 修了两个问题
+
+### ① 「今日已用」一直是 ¥0.00
+
+宿主下发的 `todayUsage` 是**余额差记账**口径（余额掉了多少算消费）。
+没有真实余额接口时这个值恒为 0，所以泡泡那行永远显示 ¥0.00。
+
+v3 改用挂件**自己账本里的本机会话消耗**（`usage-records.json` 的 `today.modelTotal`），
+也就是真正花掉的钱，标签也会跟着变成「本地估算」。
+
+### ② 每次重启余额就归零
+
+原来基线存在 `localStorage`。但 DSH Web 的端口是随机的（配置里 `port: 0`，
+实测每次启动都变：1656 → 1963 → 10849 → 8361 …），**换端口就是换源**，
+`localStorage` 直接失效，基线丢失，余额自然回到起始值。
+
+v3 把状态挪进**挂件账本**（`.dshw-usage.json` 的 `settings.models.deepseek.quota.__dshwBalance`），
+它跟着账本文件走，**跨端口、跨重启都在**。
+
+扣减口径改成**单调递增**，不会因为账本裁剪而回跳：
+
+```
+delta    = max(0, 当前累计消耗 - 上次累计消耗)
+consumed = consumed + delta          // 只增不减
+显示余额 = 起始余额 - consumed
+```
+
+> 顺带修掉了一个自测发现的坑：如果先加 delta 再更新 lastCum，下一轮会拿同一个 lastCum
+> 再算一次同样的 delta，**等于重复扣费**。v3 先推进 lastCum 再写回，并一次性落盘。
+
+实测（模拟宿主 + 磁盘账本）：
+
+| 场景 | 账本里的状态 | 显示余额 | 今日已用 |
+| --- | --- | --- | --- |
+| 首次运行 | `consumed=0, lastCum=26.87` | 2000 | 11.195 |
+| 又消费 1.5 元 | `consumed=1.5, lastCum=28.37` | 1998.5 | 12.695 |
+| 重复轮询（不应重复扣） | `consumed=1.5` 不变 | 1998.5 | — |
+| **重启 / 换端口** | `consumed=1.5` 沿用 | **1998.5**（不归零） | 12.695 |
+| 重启后再消费 3 元 | `consumed=4.5` | 1995.5 | 15.695 |
+
+---
 
 ## 安全性
 

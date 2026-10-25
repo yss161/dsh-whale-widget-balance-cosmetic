@@ -1,6 +1,7 @@
 node_modules/
 *.orig
-*.patched-check.js
+*.check.js
+__t/
 __test/
 .DS_Store
 Thumbs.db
