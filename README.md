@@ -1,25 +1,40 @@
 # dsh-whale-widget 余额美化补丁
 
 > 让 [小鲸鱼挂件](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的余额栏显示一个**好看的假数字**，
-> 专门给「接的是没有余额接口的第三方 API」的场景用。
+> 并且**随着对话消耗正常往下掉**，专门给「接的是没有余额接口的第三方 API」的场景用。
 
 ## 这是干什么的
 
 DSH 的小鲸鱼挂件（`dsh-whale-widget`）会去 `api.deepseek.com/user/balance` 或者 DSH 账号态读余额。
-如果你接的是下面这些**没有余额接口**的服务，挂件就永远显示 `¥ 0.00`：
+如果你接的是下面这些**没有余额接口**的服务，挂件就永远显示 `¥ 0.00`，每个小时都停在同一个数上：
 
 - WorkBuddy / 各种 OpenAI 兼容中转站（实测 `/v1/dashboard/billing/*`、`/v1/credits`、`/api/user/self` 全是 404）
 - 阿里云 MaaS、火山方舟这类只有 chat 接口的网关
 - 硅基流动、OpenAI、Gemini、xAI 等**官方已下线**余额接口的厂商
 - 自建 Ollama / vLLM / LiteLLM
 
-这个补丁**只改界面上显示的那个数字**，让它看起来是一个余额，图个好看。
+这个补丁做了两件事：
 
-> ⚠️ **纯美观用途**。这个数字是假的，不对应任何真实账户余额。
-> 它不是「改余额」，也不能用来判断还能用多久。
+1. **换掉显示的数字** —— 你给一个起始余额，比如 `2000`；
+2. **让它自己往下掉** —— 每 15 秒拉一次挂件自己的用量记录，把补丁生效后的真实会话消耗从余额里减掉。
+
+于是泡泡上的数字会像真的在扣费一样递减（`2000.00 → 1999.63 → 1998.87 …`）。
+
+> ⚠️ **纯美观用途**。这个数字不对应任何真实账户余额，**也不能**用来判断还能用多久。
+> 它只是把「今天花了多少」从挂件自己的账本里减给你看。
 >
 > 如果你的厂商**有**余额接口（New API / One API 等），请直接用挂件自带的
 > 「添加模型 → OpenAI 兼容中转站」模板读真实余额，不需要这个补丁。
+
+## 两种模式
+
+| 模式 | 行为 | 适用 |
+| --- | --- | --- |
+| 递减（默认） | 起始余额 − 补丁生效后的累计消耗 | 想要「余额在正常扣掉」的观感 |
+| 固定（`--fixed`） | 永远显示你填的那个数 | 只想要个漂亮数字，不在乎变化 |
+
+递减模式用 `localStorage` 记一个基线：**只为将来新产生的消耗扣数**。
+首次打补丁时历史消耗不算进去（那是已经花掉的），想连历史一起扣就加 `--include-past`。
 
 ## 它不动什么
 
@@ -49,10 +64,22 @@ if (typeof DSHW_BALANCE_OVERRIDE === "number" && isFinite(DSHW_BALANCE_OVERRIDE)
 
 需要 Node.js（DSH 用户机器上一般都有）。
 
-### 1. 打补丁
+### 1. 打补丁（递减模式，推荐）
 
 ```bash
-node scripts/patch-whale-balance.mjs 128.50
+node scripts/patch-whale-balance.mjs 2000
+```
+
+只想要个固定数字：
+
+```bash
+node scripts/patch-whale-balance.mjs 2000 --fixed
+```
+
+连打补丁之前的历史消耗一起扣掉：
+
+```bash
+node scripts/patch-whale-balance.mjs 2000 --include-past
 ```
 
 脚本会自动在 `$DSH_HOME/profiles/*/node_modules/dsh-whale-widget/assets/` 下找到 `whale-widget.js`
@@ -79,13 +106,17 @@ node scripts/patch-whale-balance.mjs 128.50 --file ~/.dsh/profiles/desktop/node_
 回到 DSH 页面按 **Ctrl+F5**（macOS 是 **Cmd+Shift+R**）。
 插件每次请求都会按 mtime 重读 `whale-widget.js`（`lib/index.js:684-700`），**不需要重启 DSH**。
 
-### 3. 改数字 / 换数字
+### 3. 改数字 / 换模式
 
 再跑一次就行，脚本每次都从 `.orig` 备份重写，**不会叠加两层补丁**：
 
 ```bash
 node scripts/patch-whale-balance.mjs 888.00
+node scripts/patch-whale-balance.mjs 888.00 --fixed
 ```
+
+换了数字之后，浏览器里记的消耗基线还在，所以会从「新起始值 − 已扣掉的那部分」继续显示。
+想从零开始算，在浏览器控制台执行 `localStorage.removeItem('dshw-balance-override-base')` 再刷新。
 
 ### 4. 还原成真实余额
 
