@@ -134,6 +134,10 @@ node scripts/patch-whale-balance.mjs --restore
 node scripts/patch-whale-balance.mjs 2000 --dry-run
 ```
 
+### Windows 双击即用
+
+仓库里有 `scripts/改余额.bat`，双击后按菜单选「递减 / 固定 / 还原」即可，不用敲命令。
+
 ### Windows 免 Node 版
 
 仓库里还有一份纯 PowerShell 实现（`scripts/改余额-B.ps1`），不需要装 Node：
