@@ -129,7 +129,17 @@ node scripts/patch-whale-balance.mjs --restore
 ### 5. 只检查不写文件
 
 ```bash
-node scripts/patch-whale-balance.mjs 128.50 --dry-run
+node scripts/patch-whale-balance.mjs 2000 --dry-run
+```
+
+### Windows 免 Node 版
+
+仓库里还有一份纯 PowerShell 实现（`scripts/改余额-B.ps1`），不需要装 Node：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 2000
+powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 2000 -Fixed
+powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 -Restore
 ```
 
 ## 安全性
