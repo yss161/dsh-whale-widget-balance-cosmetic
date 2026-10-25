@@ -1,0 +1,14 @@
+{
+  "name": "dsh-whale-widget-balance-cosmetic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "让 dsh-whale-widget 显示一个好看的余额数字，专供没有余额接口的第三方 API 使用（纯美观）",
+  "type": "module",
+  "bin": {
+    "whale-balance-cosmetic": "scripts/patch-whale-balance.mjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
