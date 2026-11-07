@@ -148,6 +148,62 @@ powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 2000 -Fixed
 powershell -ExecutionPolicy Bypass -File scripts\改余额-B.ps1 -Restore
 ```
 
+## 插件升级后补丁失效？跑一键恢复
+
+`dsh-whale-widget` 每次升级 / 重装，pnpm 会把 `node_modules` 下的文件整个替换掉，
+`whale-widget.js` 被覆盖回官方原版，补丁随之消失 —— 余额又变回 `¥ 0.00`。
+
+这不是 bug，是文件被换了。重跑一次就行：
+
+```bash
+node scripts/restore-patch.mjs
+```
+
+Windows 用户直接**双击 `scripts/一键恢复.bat`**。
+
+### 一键恢复会做什么
+
+| 情况 | 行为 |
+| --- | --- |
+| 补丁完好（3 处注入） | 报告「无需修复」，不动文件 |
+| 补丁丢失（插件刚升级） | 自动备份原版 → 重打补丁 |
+| 补丁残缺（只注入了一部分） | 从 `.orig` 原版重建 |
+| 连 `.orig` 都没了 | 把当前文件当原版备份，再打补丁 |
+| 锚点找不到（上游改了代码） | 明确报错退出，**不乱改文件** |
+
+打完会自动做语法校验，不通过就不覆盖原文件。
+
+### 起始余额会被记住
+
+起始余额存在 `balance-config.json`，恢复时自动沿用，不用每次重填。
+
+已扣金额存在挂件账本里，**不会被重置** —— 所以恢复后余额是接着上次继续扣。
+想让余额回到起始值：
+
+```bash
+node scripts/restore-patch.mjs --reset
+```
+
+### 其他模式
+
+```bash
+node scripts/restore-patch.mjs --status      # 只看状态，不改文件
+node scripts/restore-patch.mjs --base 3000   # 恢复并把起始余额改成 3000
+node scripts/restore-patch.mjs --reset       # 清掉已扣金额，回到起始值
+node scripts/restore-patch.mjs --uninstall   # 彻底还原官方原版
+```
+
+### 想彻底自动化
+
+把 `一键恢复.bat` 挂到 Windows 计划任务（登录时触发），
+每次开机自动检查并修复，就不用管了：
+
+```powershell
+schtasks /create /tn "鲸鱼余额补丁自愈" /tr "\"C:\Users\<你>\Documents\deepseek-harness\default-workspace\一键恢复.bat\"" /sc onlogon /rl highest
+```
+
+---
+
 ## v3 修了两个问题
 
 ### ① 「今日已用」一直是 ¥0.00
